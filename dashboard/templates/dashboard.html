@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Plan IA 2025 - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
+    <link href="/static/css/dashboard.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-brain"></i> Master Plan IA 2025
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#overview">Vue d'ensemble</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#agents">Agents</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#workflows">Workflows</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#metrics">Métriques</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#intelligence">Intelligence</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <span class="navbar-text">
+                            <i class="fas fa-circle text-success" id="connection-status"></i>
+                            <span id="connection-text">Connecté</span>
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <span class="navbar-text">
+                            <i class="fas fa-clock"></i>
+                            <span id="last-update">--:--</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-5 pt-3">
+        
+        <!-- Overview Section -->
+        <div id="overview" class="dashboard-section">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-chart-line"></i> Vue d'ensemble</h2>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title text-muted">Santé du système</h6>
+                                    <h3 class="card-text" id="system-health">Excellent</h3>
+                                </div>
+                                <div class="kpi-icon">
+                                    <i class="fas fa-heartbeat"></i>
+                                </div>
+                            </div>
+                            <div class="progress mt-2">
+                                <div class="progress-bar bg-success" role="progressbar" id="health-progress" style="width: 95%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title text-muted">Agents actifs</h6>
+                                    <h3 class="card-text" id="active-agents">3</h3>
+                                </div>
+                                <div class="kpi-icon">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                            </div>
+                            <small class="text-muted">sur 5 disponibles</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title text-muted">Workflows actifs</h6>
+                                    <h3 class="card-text" id="active-workflows">12</h3>
+                                </div>
+                                <div class="kpi-icon">
+                                    <i class="fas fa-project-diagram"></i>
+                                </div>
+                            </div>
+                            <small class="text-muted">+3 depuis hier</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card kpi-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title text-muted">Taux de succès</h6>
+                                    <h3 class="card-text" id="success-rate">94%</h3>
+                                </div>
+                                <div class="kpi-icon">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+                            <div class="progress mt-2">
+                                <div class="progress-bar bg-success" role="progressbar" id="success-progress" style="width: 94%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-area"></i> Performance en temps réel</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="performanceChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-pie"></i> Répartition des tâches</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="taskDistributionChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-exclamation-triangle"></i> Alertes</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="alerts-container">
+                                <!-- Alertes dynamiques -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agents Section -->
+        <div id="agents" class="dashboard-section" style="display: none;">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-robot"></i> Agents</h2>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Agents disponibles</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom</th>
+                                            <th>Type</th>
+                                            <th>Statut</th>
+                                            <th>Charge</th>
+                                            <th>Performance</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agents-table">
+                                        <!-- Contenu dynamique -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workflows Section -->
+        <div id="workflows" class="dashboard-section" style="display: none;">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-project-diagram"></i> Workflows</h2>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Workflows actifs</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom</th>
+                                            <th>Pattern</th>
+                                            <th>Statut</th>
+                                            <th>Progression</th>
+                                            <th>Agents</th>
+                                            <th>Créé</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="workflows-table">
+                                        <!-- Contenu dynamique -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Section -->
+        <div id="metrics" class="dashboard-section" style="display: none;">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-chart-bar"></i> Métriques détaillées</h2>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Temps de réponse</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="responseTimeChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Charge des agents</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="agentLoadChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Toutes les métriques</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="metrics-grid">
+                                <!-- Métriques dynamiques -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Intelligence Section -->
+        <div id="intelligence" class="dashboard-section" style="display: none;">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2><i class="fas fa-brain"></i> Intelligence artificielle</h2>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="fas fa-graduation-cap"></i> Score d'apprentissage</h5>
+                            <div class="progress mb-2">
+                                <div class="progress-bar bg-info" role="progressbar" id="learning-progress" style="width: 85%"></div>
+                            </div>
+                            <span id="learning-score">85%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="fas fa-cog"></i> Adaptations</h5>
+                            <h3 id="adaptations-count">24</h3>
+                            <small class="text-muted">Cette semaine</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5><i class="fas fa-magic"></i> Stratégie actuelle</h5>
+                            <h4 id="current-strategy">Hybride</h4>
+                            <button class="btn btn-sm btn-outline-primary" onclick="changeStrategy()">Changer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Efficacité des patterns</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="patternEfficiencyChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Modals -->
+    <div class="modal fade" id="actionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="action-message"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" onclick="executeAction()">Exécuter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
