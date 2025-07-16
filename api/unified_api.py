@@ -48,10 +48,13 @@ def safe_import(module_name, fallback_class=None):
 # Imports sécurisés
 try:
     orchestration_module = safe_import('orchestration_hub')
+    voice_detection_module = safe_import('voice_detection')
     jwt_auth_module = safe_import('jwt_auth')
     webhook_module = safe_import('webhook_system')
     logging_module = safe_import('logging_system')
     OrchestrationHub = orchestration_module.OrchestrationHub
+    VoiceDetectionSystem = voice_detection_module.VoiceDetectionSystem
+    VoiceCommandProcessor = voice_detection_module.VoiceCommandProcessor
     Agent = orchestration_module.Agent
     Task = orchestration_module.Task
     AgentType = orchestration_module.AgentType
@@ -104,6 +107,24 @@ except ImportError as e:
     
     OrchestrationHub = MockOrchestrationHub
     AgentCoordinator = MockAgentCoordinator
+    
+    # Mock classes pour la détection vocale
+    class MockVoiceDetectionSystem:
+        def __init__(self, *args, **kwargs):
+            pass
+        def start_listening(self):
+            return False
+        def stop_listening(self):
+            pass
+        def get_status(self):
+            return {'vosk_available': False}
+    
+    class MockVoiceCommandProcessor:
+        def __init__(self, *args, **kwargs):
+            pass
+    
+    VoiceDetectionSystem = MockVoiceDetectionSystem
+    VoiceCommandProcessor = MockVoiceCommandProcessor
     Agent = dict
     Task = dict
     AgentType = object
@@ -171,6 +192,23 @@ class CoordinationRequest(BaseModel):
     coordination_type: str = "collaborative"
     parameters: Dict[str, Any] = {}
 
+class VoiceConfigModel(BaseModel):
+    model_path: str = "models/vosk-model-small-fr-0.22"
+    language: str = "fr-FR"
+    sample_rate: int = 16000
+    
+class VoiceCommandModel(BaseModel):
+    text: str
+    timestamp: Optional[str] = None
+    language: Optional[str] = None
+    
+class VoiceRecognitionResult(BaseModel):
+    text: str
+    is_final: bool
+    timestamp: str
+    language: str
+    confidence: Optional[float] = None
+
 class SystemStatus(BaseModel):
     status: str
     uptime: float
@@ -184,11 +222,13 @@ orchestration_hub: OrchestrationHub = None
 agent_coordinator: AgentCoordinator = None
 cached_hub = None
 cached_coordinator = None
+voice_detector: VoiceDetectionSystem = None
+voice_processor: VoiceCommandProcessor = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application"""
-    global orchestration_hub, agent_coordinator, cached_hub, cached_coordinator
+    global orchestration_hub, agent_coordinator, cached_hub, cached_coordinator, voice_detector, voice_processor
     
     # Initialisation
     logger.info("🚀 Initializing Master Plan IA 2025 API...")
@@ -236,6 +276,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Webhook system initialization warning: {e}")
     
+    # Initialisation du système de détection vocale
+    try:
+        voice_detector = VoiceDetectionSystem()
+        voice_processor = VoiceCommandProcessor(voice_detector)
+        logger.info("✅ Voice detection system initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Voice detection initialization warning: {e}")
+    
     logger.info("✅ Master Plan IA 2025 API initialized")
     
     yield
@@ -272,6 +320,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Webhook system stopped")
     except Exception as e:
         logger.error(f"Error stopping webhook system: {e}")
+    
+    # Arrêt du système de détection vocale
+    try:
+        if voice_detector:
+            voice_detector.stop_listening()
+        logger.info("✅ Voice detection system stopped")
+    except Exception as e:
+        logger.error(f"Error stopping voice detection: {e}")
     
     logger.info("✅ Shutdown complete")
 
@@ -1295,6 +1351,119 @@ async def stream_monitoring_events(
     
     return StreamingResponse(
         event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+# Routes de détection vocale
+
+@app.get("/voice/status", response_model=Dict[str, Any])
+async def get_voice_status():
+    """Statut du système de détection vocale"""
+    if voice_detector:
+        return voice_detector.get_status()
+    return {"vosk_available": False, "error": "Voice detection not initialized"}
+
+@app.post("/voice/start", response_model=Dict[str, Any])
+async def start_voice_detection(
+    config: Optional[VoiceConfigModel] = None,
+    current_user: Dict[str, Any] = Depends(require_user)
+):
+    """Démarre la détection vocale"""
+    try:
+        if not voice_detector:
+            raise HTTPException(status_code=503, detail="Voice detection not initialized")
+        
+        if config:
+            # Reconfigurer le détecteur si nécessaire
+            voice_detector.model_path = config.model_path
+            voice_detector.language = config.language
+            voice_detector.sample_rate = config.sample_rate
+        
+        success = voice_detector.start_listening()
+        if success:
+            return {"success": True, "message": "Voice detection started"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to start voice detection")
+    except Exception as e:
+        logger.error(f"Start voice detection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice/stop", response_model=Dict[str, Any])
+async def stop_voice_detection(
+    current_user: Dict[str, Any] = Depends(require_user)
+):
+    """Arrête la détection vocale"""
+    try:
+        if not voice_detector:
+            raise HTTPException(status_code=503, detail="Voice detection not initialized")
+        
+        voice_detector.stop_listening()
+        return {"success": True, "message": "Voice detection stopped"}
+    except Exception as e:
+        logger.error(f"Stop voice detection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice/command", response_model=Dict[str, Any])
+async def process_voice_command(
+    command: VoiceCommandModel,
+    current_user: Dict[str, Any] = Depends(require_user)
+):
+    """Traite une commande vocale"""
+    try:
+        if not voice_processor:
+            raise HTTPException(status_code=503, detail="Voice processor not initialized")
+        
+        result = voice_processor.process_command(command.text)
+        return {
+            "command": command.text,
+            "result": result,
+            "timestamp": datetime.now().isoformat(),
+            "user": current_user['email']
+        }
+    except Exception as e:
+        logger.error(f"Process voice command error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/voice/stream")
+async def voice_stream(
+    current_user: Dict[str, Any] = Depends(require_user)
+):
+    """Stream des résultats de reconnaissance vocale en temps réel"""
+    
+    async def recognition_generator():
+        """Générateur d'événements de reconnaissance vocale"""
+        recognition_queue = asyncio.Queue()
+        
+        def on_recognition(result):
+            try:
+                asyncio.create_task(recognition_queue.put(result))
+            except Exception as e:
+                logger.error(f"Error in recognition callback: {e}")
+        
+        try:
+            if voice_detector:
+                voice_detector.start_listening(callback=on_recognition)
+            
+            while True:
+                try:
+                    result = await asyncio.wait_for(recognition_queue.get(), timeout=1)
+                    yield f"data: {json.dumps(result)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'heartbeat': datetime.now().isoformat()})}\n\n"
+                    
+        except Exception as e:
+            logger.error(f"Error in voice stream: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            if voice_detector:
+                voice_detector.stop_listening()
+    
+    return StreamingResponse(
+        recognition_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -19,3 +19,80 @@ numpy==2.3.1
 supabase==2.16.0
 PyJWT>=2.10.1
 aiohttp==3.9.1
+
+# Voice Detection Dependencies
+vosk==0.3.45
+pyaudio==0.2.14
+speechrecognition==3.10.0
+
+# Additional dependencies for voice processing
+sounddevice==0.5.1
+soundfile==0.12.1
+librosa==0.10.1
+
+# Advanced System Dependencies
+# Observability & Monitoring
+prometheus-client==0.21.0
+grafana-api==1.0.3
+jaeger-client==4.8.0
+opentelemetry-api==1.28.2
+opentelemetry-instrumentation==0.49b2
+
+# Security System
+cryptography==43.0.3
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+ipaddress==1.0.23
+watchdog==6.0.0
+
+# Configuration Management
+pydantic==2.11.7
+python-dotenv==1.0.0
+configparser==7.1.0
+
+# Backup & Storage
+boto3==1.35.81
+botocore==1.35.81
+azure-storage-blob==12.24.0
+google-cloud-storage==2.19.0
+
+# Deployment System
+docker==7.1.0
+kubernetes==31.1.0
+paramiko==3.5.0
+fabric==3.2.2
+
+# Database & Caching
+redis[hiredis]==5.0.1
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
+
+# Message Queue & Communication
+celery==5.4.0
+pika==1.3.2
+kafka-python==2.0.2
+
+# Development & Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+black==24.10.0
+flake8==7.1.1
+mypy==1.14.0
+
+# Performance & Optimization
+numpy==2.3.1
+pandas==2.2.3
+cachetools==5.5.0
+ujson==5.10.0
+orjson==3.10.12
+
+# Additional utilities
+click==8.1.7
+rich==13.9.4
+typer==0.15.1
+schedule==1.2.2
+croniter==5.0.1
