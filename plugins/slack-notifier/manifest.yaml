@@ -1,0 +1,52 @@
+name: slack-notifier
+version: 1.0.0
+description: Plugin de notification Slack pour les alertes et événements du système
+author: Master Plan IA Team
+plugin_type: notification
+entry_point: slack_notifier.py
+api_version: "1.0"
+license: MIT
+homepage: https://github.com/masterplan-ia/slack-notifier
+tags:
+  - notification
+  - slack
+  - alerts
+  - communication
+min_python_version: "3.9"
+dependencies:
+  - requests
+  - json
+permissions:
+  - internet_access
+  - api_calls
+  - system_events
+config_schema:
+  webhook_url:
+    type: string
+    required: true
+    description: URL du webhook Slack
+  default_channel:
+    type: string
+    required: false
+    default: "#general"
+    description: Canal par défaut
+  username:
+    type: string
+    required: false
+    default: "Master Plan IA"
+    description: Nom d'utilisateur du bot
+  icon_emoji:
+    type: string
+    required: false
+    default: ":robot_face:"
+    description: Emoji d'icône
+  alert_levels:
+    type: array
+    required: false
+    default: ["error", "warning", "info"]
+    description: Niveaux d'alerte à notifier
+  rate_limit:
+    type: integer
+    required: false
+    default: 10
+    description: Limite de messages par minute

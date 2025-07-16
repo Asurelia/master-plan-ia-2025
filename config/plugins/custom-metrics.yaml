@@ -1,0 +1,58 @@
+# Configuration pour le plugin Custom Metrics
+collection_interval: 30  # secondes
+metrics_retention: 86400  # 24 heures
+aggregation_window: 300  # 5 minutes
+
+# Métriques personnalisées à collecter
+custom_metrics:
+  - name: "api_response_time"
+    type: "histogram"
+    description: "Temps de réponse API"
+    unit: "milliseconds"
+  
+  - name: "agent_success_rate"
+    type: "gauge"
+    description: "Taux de succès des agents"
+    unit: "percentage"
+  
+  - name: "workflow_completion_rate"
+    type: "gauge"
+    description: "Taux de completion des workflows"
+    unit: "percentage"
+
+# Seuils d'alerte
+alert_thresholds:
+  system_cpu_percent:
+    max: 80
+    warning: 70
+  
+  system_memory_percent:
+    max: 90
+    warning: 80
+  
+  system_disk_usage:
+    max: 85
+    warning: 75
+  
+  python_memory_usage:
+    max: 500  # MB
+    warning: 300
+
+# Métriques système à collecter
+system_metrics:
+  enabled: true
+  collect_cpu: true
+  collect_memory: true
+  collect_disk: true
+  collect_network: true
+  collect_processes: true
+  collect_threads: true
+
+# Exportation des métriques
+export:
+  enabled: true
+  formats:
+    - "json"
+    - "csv"
+  export_interval: 3600  # 1 heure
+  export_path: "/tmp/metrics"

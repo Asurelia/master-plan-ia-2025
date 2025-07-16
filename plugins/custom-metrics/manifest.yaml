@@ -1,0 +1,47 @@
+name: custom-metrics
+version: 1.0.0
+description: Plugin de métriques personnalisées pour collecter et analyser des données spécifiques
+author: Master Plan IA Team
+plugin_type: metrics
+entry_point: custom_metrics.py
+api_version: "1.0"
+license: MIT
+homepage: https://github.com/masterplan-ia/custom-metrics
+tags:
+  - metrics
+  - analytics
+  - monitoring
+  - performance
+min_python_version: "3.9"
+dependencies:
+  - statistics
+  - collections
+permissions:
+  - system_monitoring
+  - data_collection
+config_schema:
+  collection_interval:
+    type: integer
+    required: false
+    default: 30
+    description: Intervalle de collecte en secondes
+  metrics_retention:
+    type: integer
+    required: false
+    default: 86400
+    description: Durée de rétention des métriques en secondes
+  custom_metrics:
+    type: array
+    required: false
+    default: []
+    description: Liste des métriques personnalisées à collecter
+  aggregation_window:
+    type: integer
+    required: false
+    default: 300
+    description: Fenêtre d'agrégation en secondes
+  alert_thresholds:
+    type: object
+    required: false
+    default: {}
+    description: Seuils d'alerte pour les métriques

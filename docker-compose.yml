@@ -1,0 +1,177 @@
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: masterplan-postgres
+    environment:
+      POSTGRES_DB: masterplan_ia
+      POSTGRES_USER: masterplan
+      POSTGRES_PASSWORD: masterplan_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    container_name: masterplan-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # API Gateway - Point d'entrée unique
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/api-gateway/Dockerfile
+    container_name: masterplan-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://masterplan:masterplan_secret@postgres:5432/masterplan_ia
+      - REDIS_URL=redis://redis:6379
+      - ORCHESTRATOR_URL=http://orchestrator:8001
+      - COORDINATOR_URL=http://coordinator:8002
+      - METRICS_URL=http://metrics:8003
+      - AUTOSCALER_URL=http://autoscaler:8004
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Dashboard Web
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/dashboard/Dockerfile
+    container_name: masterplan-dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      - API_GATEWAY_URL=http://api-gateway:8000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+      - api-gateway
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Orchestrateur principal
+  orchestrator:
+    build:
+      context: .
+      dockerfile: docker/orchestrator/Dockerfile
+    container_name: masterplan-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://masterplan:masterplan_secret@postgres:5432/masterplan_ia
+      - REDIS_URL=redis://redis:6379
+      - COORDINATOR_URL=http://coordinator:8002
+      - METRICS_URL=http://metrics:8003
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Coordinateur intelligent
+  coordinator:
+    build:
+      context: .
+      dockerfile: docker/coordinator/Dockerfile
+    container_name: masterplan-coordinator
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://masterplan:masterplan_secret@postgres:5432/masterplan_ia
+      - REDIS_URL=redis://redis:6379
+      - METRICS_URL=http://metrics:8003
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Système de métriques
+  metrics:
+    build:
+      context: .
+      dockerfile: docker/metrics/Dockerfile
+    container_name: masterplan-metrics
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://masterplan:masterplan_secret@postgres:5432/masterplan_ia
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Auto-scaler
+  autoscaler:
+    build:
+      context: .
+      dockerfile: docker/autoscaler/Dockerfile
+    container_name: masterplan-autoscaler
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://masterplan:masterplan_secret@postgres:5432/masterplan_ia
+      - REDIS_URL=redis://redis:6379
+      - ORCHESTRATOR_URL=http://orchestrator:8001
+      - METRICS_URL=http://metrics:8003
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+  # Nginx - Load balancer et reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: masterplan-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api-gateway
+      - dashboard
+    networks:
+      - masterplan-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  masterplan-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

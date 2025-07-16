@@ -48,16 +48,46 @@ def safe_import(module_name, fallback_class=None):
 # Imports sécurisés
 try:
     orchestration_module = safe_import('orchestration_hub')
+    jwt_auth_module = safe_import('jwt_auth')
+    webhook_module = safe_import('webhook_system')
+    logging_module = safe_import('logging_system')
     OrchestrationHub = orchestration_module.OrchestrationHub
     Agent = orchestration_module.Agent
     Task = orchestration_module.Task
     AgentType = orchestration_module.AgentType
+    
+    # JWT Auth
+    jwt_auth = jwt_auth_module.jwt_auth
+    UserCreate = jwt_auth_module.UserCreate
+    UserLogin = jwt_auth_module.UserLogin
+    TokenResponse = jwt_auth_module.TokenResponse
+    get_current_user = jwt_auth_module.get_current_user
+    require_admin = jwt_auth_module.require_admin
+    require_user = jwt_auth_module.require_user
+    
+    # Webhook System
+    webhook_manager = webhook_module.webhook_manager
+    WebhookEndpoint = webhook_module.WebhookEndpoint
+    WebhookEvent = webhook_module.WebhookEvent
+    
+    # Logging System
+    structured_logger = logging_module.logger
+    LogLevel = logging_module.LogLevel
+    LogComponent = logging_module.LogComponent
     TaskStatus = orchestration_module.TaskStatus
     
     coordinator_module = safe_import('agent_coordinator')
     AgentCoordinator = coordinator_module.AgentCoordinator
     CoordinationPattern = coordinator_module.CoordinationPattern
     Workflow = coordinator_module.Workflow
+    
+    # Import du cache manager
+    cache_module = safe_import('cache_integration')
+    cache_manager = cache_module.cache_manager
+    
+    # Import du gestionnaire de plugins
+    plugin_module = safe_import('plugin_system')
+    plugin_manager = plugin_module.plugin_manager
     
 except ImportError as e:
     logger.error(f"Critical import error: {e}")
@@ -80,6 +110,33 @@ except ImportError as e:
     TaskStatus = object
     CoordinationPattern = object
     Workflow = dict
+    
+    # Fallback pour cache_manager et plugin_manager
+    class MockCacheManager:
+        async def connect(self): pass
+        async def disconnect(self): pass
+        def wrap_orchestration_hub(self, hub): return hub
+        def wrap_coordinator(self, coordinator): return coordinator
+        async def warm_up_cache(self): pass
+        async def get_cache_stats(self): return {}
+        async def optimize_cache(self): pass
+        def get_cache_health(self): return {}
+        cache = type('MockCache', (), {'flush_namespace': lambda self, ns: 0})()
+    
+    class MockPluginManager:
+        async def initialize(self): pass
+        async def shutdown(self): pass
+        def list_plugins(self): return []
+        def get_plugin_info(self, name): return None
+        async def load_plugin(self, name): return False
+        async def unload_plugin(self, name): return False
+        async def reload_plugin(self, name): return False
+        def get_plugin(self, name): return None
+        def get_plugins_by_type(self, ptype): return []
+        async def get_system_stats(self): return {}
+    
+    cache_manager = MockCacheManager()
+    plugin_manager = MockPluginManager()
 
 # Configuration logging
 logging.basicConfig(level=logging.INFO)
@@ -125,11 +182,13 @@ class SystemStatus(BaseModel):
 # Variables globales
 orchestration_hub: OrchestrationHub = None
 agent_coordinator: AgentCoordinator = None
+cached_hub = None
+cached_coordinator = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application"""
-    global orchestration_hub, agent_coordinator
+    global orchestration_hub, agent_coordinator, cached_hub, cached_coordinator
     
     # Initialisation
     logger.info("🚀 Initializing Master Plan IA 2025 API...")
@@ -137,8 +196,45 @@ async def lifespan(app: FastAPI):
     orchestration_hub = OrchestrationHub()
     agent_coordinator = AgentCoordinator(orchestration_hub)
     
+    # Initialisation du cache Redis
+    try:
+        await cache_manager.connect()
+        # Wrapper les composants avec le cache
+        cached_hub = cache_manager.wrap_orchestration_hub(orchestration_hub)
+        cached_coordinator = cache_manager.wrap_coordinator(agent_coordinator)
+        
+        # Precharger le cache
+        await cache_manager.warm_up_cache()
+        
+        logger.info("✅ Redis cache initialized and warmed up")
+    except Exception as e:
+        logger.warning(f"⚠️ Redis cache initialization failed: {e}")
+        cached_hub = orchestration_hub
+        cached_coordinator = agent_coordinator
+    
+    # Initialisation du système de plugins
+    try:
+        await plugin_manager.initialize()
+        logger.info("✅ Plugin system initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Plugin system initialization failed: {e}")
+    
     # Enregistrer quelques agents par défaut
     await register_default_agents()
+    
+    # Initialisation du système d'authentification
+    try:
+        await jwt_auth.cleanup_expired_sessions()
+        logger.info("✅ JWT Auth system initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ JWT Auth initialization warning: {e}")
+    
+    # Initialisation du système de webhooks
+    try:
+        await webhook_manager.start()
+        logger.info("✅ Webhook system initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Webhook system initialization warning: {e}")
     
     logger.info("✅ Master Plan IA 2025 API initialized")
     
@@ -148,6 +244,35 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Shutting down Master Plan IA 2025 API...")
     if orchestration_hub:
         await orchestration_hub.shutdown()
+    
+    # Déconnexion du cache Redis
+    try:
+        await cache_manager.disconnect()
+        logger.info("✅ Redis cache disconnected")
+    except Exception as e:
+        logger.error(f"Error disconnecting Redis cache: {e}")
+    
+    # Arrêt du système de plugins
+    try:
+        await plugin_manager.shutdown()
+        logger.info("✅ Plugin system shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down plugin system: {e}")
+    
+    # Nettoyage des sessions JWT
+    try:
+        await jwt_auth.cleanup_expired_sessions()
+        logger.info("✅ JWT sessions cleaned up")
+    except Exception as e:
+        logger.error(f"Error cleaning up JWT sessions: {e}")
+    
+    # Arrêt du système de webhooks
+    try:
+        await webhook_manager.stop()
+        logger.info("✅ Webhook system stopped")
+    except Exception as e:
+        logger.error(f"Error stopping webhook system: {e}")
+    
     logger.info("✅ Shutdown complete")
 
 # Création de l'application FastAPI
@@ -195,16 +320,22 @@ async def register_default_agents():
 
 # Dépendances
 async def get_orchestration_hub() -> OrchestrationHub:
-    """Retourne le hub d'orchestration"""
-    if orchestration_hub is None:
+    """Retourne le hub d'orchestration (version cachée si disponible)"""
+    if cached_hub is not None:
+        return cached_hub
+    elif orchestration_hub is not None:
+        return orchestration_hub
+    else:
         raise HTTPException(status_code=500, detail="Orchestration hub not initialized")
-    return orchestration_hub
 
 async def get_agent_coordinator() -> AgentCoordinator:
-    """Retourne le coordinateur d'agents"""
-    if agent_coordinator is None:
+    """Retourne le coordinateur d'agents (version cachée si disponible)"""
+    if cached_coordinator is not None:
+        return cached_coordinator
+    elif agent_coordinator is not None:
+        return agent_coordinator
+    else:
         raise HTTPException(status_code=500, detail="Agent coordinator not initialized")
-    return agent_coordinator
 
 # Routes principales
 
@@ -246,6 +377,169 @@ async def get_system_status(hub: OrchestrationHub = Depends(get_orchestration_hu
         )
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/system/cache/stats")
+async def get_cache_stats():
+    """Retourne les statistiques du cache Redis"""
+    try:
+        stats = await cache_manager.get_cache_stats()
+        health = cache_manager.get_cache_health()
+        
+        return {
+            "cache_stats": stats,
+            "cache_health": health,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/system/cache/optimize")
+async def optimize_cache():
+    """Optimise le cache Redis"""
+    try:
+        await cache_manager.optimize_cache()
+        return {"message": "Cache optimized successfully"}
+    except Exception as e:
+        logger.error(f"Error optimizing cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/system/cache/flush/{namespace}")
+async def flush_cache_namespace(namespace: str):
+    """Vide un namespace du cache"""
+    try:
+        count = await cache_manager.cache.flush_namespace(namespace)
+        return {"message": f"Flushed {count} keys from namespace {namespace}"}
+    except Exception as e:
+        logger.error(f"Error flushing cache namespace {namespace}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Routes des plugins
+
+@app.get("/plugins")
+async def list_plugins():
+    """Liste tous les plugins disponibles"""
+    try:
+        plugins = plugin_manager.list_plugins()
+        return {
+            "plugins": [plugin.to_dict() for plugin in plugins],
+            "total": len(plugins)
+        }
+    except Exception as e:
+        logger.error(f"Error listing plugins: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/plugins/{plugin_name}")
+async def get_plugin_info(plugin_name: str):
+    """Récupère les informations d'un plugin"""
+    try:
+        plugin_info = plugin_manager.get_plugin_info(plugin_name)
+        if not plugin_info:
+            raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
+        return plugin_info.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting plugin info {plugin_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/plugins/{plugin_name}/load")
+async def load_plugin(plugin_name: str):
+    """Charge un plugin"""
+    try:
+        success = await plugin_manager.load_plugin(plugin_name)
+        if success:
+            return {"message": f"Plugin {plugin_name} loaded successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to load plugin {plugin_name}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading plugin {plugin_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/plugins/{plugin_name}/unload")
+async def unload_plugin(plugin_name: str):
+    """Décharge un plugin"""
+    try:
+        success = await plugin_manager.unload_plugin(plugin_name)
+        if success:
+            return {"message": f"Plugin {plugin_name} unloaded successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to unload plugin {plugin_name}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unloading plugin {plugin_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/plugins/{plugin_name}/reload")
+async def reload_plugin(plugin_name: str):
+    """Recharge un plugin"""
+    try:
+        success = await plugin_manager.reload_plugin(plugin_name)
+        if success:
+            return {"message": f"Plugin {plugin_name} reloaded successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to reload plugin {plugin_name}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reloading plugin {plugin_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/plugins/{plugin_name}/metrics")
+async def get_plugin_metrics(plugin_name: str):
+    """Récupère les métriques d'un plugin"""
+    try:
+        plugin = plugin_manager.get_plugin(plugin_name)
+        if not plugin:
+            raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found or not active")
+        
+        metrics = await plugin.get_metrics()
+        return metrics
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting plugin metrics {plugin_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/plugins/stats")
+async def get_plugin_system_stats():
+    """Récupère les statistiques du système de plugins"""
+    try:
+        stats = await plugin_manager.get_system_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting plugin system stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/plugins/type/{plugin_type}")
+async def get_plugins_by_type(plugin_type: str):
+    """Récupère les plugins par type"""
+    try:
+        from plugin_system import PluginType
+        
+        # Convertir le string en enum
+        try:
+            plugin_type_enum = PluginType(plugin_type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid plugin type: {plugin_type}")
+        
+        plugins = plugin_manager.get_plugins_by_type(plugin_type_enum)
+        plugin_infos = plugin_manager.list_plugins(plugin_type_enum)
+        
+        return {
+            "plugin_type": plugin_type,
+            "plugins": [plugin.to_dict() for plugin in plugin_infos],
+            "active_count": len(plugins),
+            "total_count": len(plugin_infos)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting plugins by type {plugin_type}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Routes des agents
@@ -493,6 +787,298 @@ async def list_workflows(
         logger.error(f"Error listing workflows: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== AUTHENTICATION ROUTES ====================
+
+@app.post("/auth/register", response_model=TokenResponse)
+async def register_user(user_data: UserCreate):
+    """Enregistre un nouvel utilisateur"""
+    try:
+        result = await jwt_auth.register_user(user_data)
+        return TokenResponse(
+            access_token=result['access_token'],
+            token_type=result['token_type'],
+            expires_in=result['expires_in'],
+            user=result['user']
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login_user(credentials: UserLogin):
+    """Connecte un utilisateur"""
+    try:
+        result = await jwt_auth.authenticate_user(credentials)
+        return TokenResponse(
+            access_token=result['access_token'],
+            token_type=result['token_type'],
+            expires_in=result['expires_in'],
+            user=result['user']
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@app.post("/auth/logout")
+async def logout_user(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Déconnecte un utilisateur"""
+    try:
+        result = await jwt_auth.logout_user()
+        return {"message": "Logged out successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        raise HTTPException(status_code=500, detail="Logout failed")
+
+@app.post("/auth/refresh")
+async def refresh_access_token(refresh_token: str):
+    """Rafraîchit un token d'accès"""
+    try:
+        result = await jwt_auth.refresh_token(refresh_token)
+        return {
+            "access_token": result['access_token'],
+            "token_type": result['token_type'],
+            "expires_in": result['expires_in']
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token refresh error: {e}")
+        raise HTTPException(status_code=500, detail="Token refresh failed")
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Récupère les informations de l'utilisateur actuel"""
+    return current_user
+
+@app.get("/auth/sessions")
+async def get_user_sessions(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Récupère les sessions actives de l'utilisateur"""
+    try:
+        sessions = await jwt_auth.get_user_sessions(current_user['id'])
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Get sessions error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve sessions")
+
+@app.get("/auth/stats")
+async def get_auth_stats(current_user: Dict[str, Any] = Depends(require_admin)):
+    """Récupère les statistiques d'authentification (admin seulement)"""
+    try:
+        stats = jwt_auth.get_stats()
+        return {"auth_stats": stats}
+    except Exception as e:
+        logger.error(f"Get auth stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve auth stats")
+
+# ==================== WEBHOOK ROUTES ====================
+
+@app.post("/webhooks")
+async def create_webhook(
+    webhook: WebhookEndpoint,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Crée un nouveau webhook (admin seulement)"""
+    try:
+        webhook_id = await webhook_manager.register_webhook(webhook)
+        return {
+            "success": True,
+            "webhook_id": webhook_id,
+            "message": "Webhook created successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create webhook")
+
+@app.get("/webhooks")
+async def list_webhooks(current_user: Dict[str, Any] = Depends(require_admin)):
+    """Liste tous les webhooks (admin seulement)"""
+    try:
+        webhooks = await webhook_manager.get_webhooks()
+        return {"webhooks": webhooks}
+    except Exception as e:
+        logger.error(f"List webhooks error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve webhooks")
+
+@app.get("/webhooks/{webhook_id}")
+async def get_webhook(
+    webhook_id: str,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Récupère un webhook spécifique (admin seulement)"""
+    try:
+        webhook = await webhook_manager.get_webhook(webhook_id)
+        if not webhook:
+            raise HTTPException(status_code=404, detail="Webhook not found")
+        return {"webhook": webhook}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve webhook")
+
+@app.put("/webhooks/{webhook_id}")
+async def update_webhook(
+    webhook_id: str,
+    updates: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Met à jour un webhook (admin seulement)"""
+    try:
+        success = await webhook_manager.update_webhook(webhook_id, updates)
+        if not success:
+            raise HTTPException(status_code=404, detail="Webhook not found")
+        return {"success": True, "message": "Webhook updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update webhook")
+
+@app.delete("/webhooks/{webhook_id}")
+async def delete_webhook(
+    webhook_id: str,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Supprime un webhook (admin seulement)"""
+    try:
+        success = await webhook_manager.unregister_webhook(webhook_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Webhook not found")
+        return {"success": True, "message": "Webhook deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete webhook")
+
+@app.get("/webhooks/{webhook_id}/deliveries")
+async def get_webhook_deliveries(
+    webhook_id: str,
+    limit: int = 100,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Récupère les livraisons d'un webhook (admin seulement)"""
+    try:
+        deliveries = await webhook_manager.get_deliveries(webhook_id, limit)
+        return {"deliveries": deliveries}
+    except Exception as e:
+        logger.error(f"Get deliveries error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve deliveries")
+
+@app.post("/webhooks/test")
+async def test_webhook(
+    webhook_id: str,
+    event: WebhookEvent,
+    test_data: Dict[str, Any] = None,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Teste un webhook avec des données fictives (admin seulement)"""
+    try:
+        if test_data is None:
+            test_data = {
+                "test": True,
+                "timestamp": datetime.now().isoformat(),
+                "triggered_by": current_user['email']
+            }
+        
+        await webhook_manager.trigger_event(event, test_data, {
+            "test_mode": True,
+            "webhook_id": webhook_id
+        })
+        
+        return {"success": True, "message": "Test webhook triggered"}
+    except Exception as e:
+        logger.error(f"Test webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to test webhook")
+
+@app.get("/webhooks/stats")
+async def get_webhook_stats(current_user: Dict[str, Any] = Depends(require_admin)):
+    """Récupère les statistiques des webhooks (admin seulement)"""
+    try:
+        stats = webhook_manager.get_stats()
+        return {"webhook_stats": stats}
+    except Exception as e:
+        logger.error(f"Get webhook stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve webhook stats")
+
+@app.get("/webhooks/events")
+async def get_webhook_events(current_user: Dict[str, Any] = Depends(require_user)):
+    """Liste tous les types d'événements webhook disponibles"""
+    try:
+        events = [{"name": event.name, "value": event.value} for event in WebhookEvent]
+        return {"events": events}
+    except Exception as e:
+        logger.error(f"Get webhook events error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve webhook events")
+
+# ==================== LOGGING ROUTES ====================
+
+@app.get("/logs")
+async def get_logs(
+    component: Optional[LogComponent] = None,
+    level: Optional[LogLevel] = None,
+    limit: int = 100,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Récupère les logs (admin seulement)"""
+    try:
+        logs = await structured_logger.get_recent_logs(component, level, limit)
+        return {"logs": logs}
+    except Exception as e:
+        logger.error(f"Get logs error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve logs")
+
+@app.get("/logs/stats")
+async def get_log_stats(current_user: Dict[str, Any] = Depends(require_admin)):
+    """Récupère les statistiques de logging (admin seulement)"""
+    try:
+        stats = structured_logger.get_stats()
+        return {"log_stats": stats}
+    except Exception as e:
+        logger.error(f"Get log stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve log stats")
+
+@app.post("/logs/cleanup")
+async def cleanup_logs(
+    days: int = 30,
+    current_user: Dict[str, Any] = Depends(require_admin)
+):
+    """Nettoie les anciens logs (admin seulement)"""
+    try:
+        structured_logger.cleanup_old_logs(days)
+        return {"success": True, "message": f"Cleaned up logs older than {days} days"}
+    except Exception as e:
+        logger.error(f"Cleanup logs error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to cleanup logs")
+
+@app.get("/logs/levels")
+async def get_log_levels(current_user: Dict[str, Any] = Depends(require_user)):
+    """Liste tous les niveaux de log disponibles"""
+    try:
+        levels = [{"name": level.name, "value": level.value} for level in LogLevel]
+        return {"levels": levels}
+    except Exception as e:
+        logger.error(f"Get log levels error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve log levels")
+
+@app.get("/logs/components")
+async def get_log_components(current_user: Dict[str, Any] = Depends(require_user)):
+    """Liste tous les composants de log disponibles"""
+    try:
+        components = [{"name": component.name, "value": component.value} for component in LogComponent]
+        return {"components": components}
+    except Exception as e:
+        logger.error(f"Get log components error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve log components")
+
 @app.post("/workflows", response_model=Dict[str, Any])
 async def create_workflow(
     workflow: WorkflowModel,
@@ -635,9 +1221,10 @@ async def get_coordination_metrics(
 @app.get("/monitoring/events", response_model=List[Dict[str, Any]])
 async def get_monitoring_events(
     limit: int = 100,
-    hub: OrchestrationHub = Depends(get_orchestration_hub)
+    hub: OrchestrationHub = Depends(get_orchestration_hub),
+    current_user: Dict[str, Any] = Depends(require_user)
 ):
-    """Récupère les événements de monitoring"""
+    """Récupère les événements de monitoring (authentification requise)"""
     try:
         # Retourner les événements récents du hub
         events = []
@@ -681,9 +1268,10 @@ async def get_monitoring_events(
 
 @app.get("/monitoring/stream")
 async def stream_monitoring_events(
-    hub: OrchestrationHub = Depends(get_orchestration_hub)
+    hub: OrchestrationHub = Depends(get_orchestration_hub),
+    current_user: Dict[str, Any] = Depends(require_user)
 ):
-    """Stream des événements de monitoring en temps réel"""
+    """Stream des événements de monitoring en temps réel (authentification requise)"""
     
     async def event_generator() -> AsyncGenerator[str, None]:
         """Générateur d'événements en temps réel"""

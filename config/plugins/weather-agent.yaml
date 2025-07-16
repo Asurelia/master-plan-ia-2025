@@ -1,0 +1,24 @@
+# Configuration pour le plugin Weather Agent
+api_key: ""  # Clé API météo (laisser vide pour utiliser les données simulées)
+default_city: "Paris"
+update_interval: 300  # 5 minutes
+temperature_unit: "celsius"
+
+# Villes à surveiller automatiquement
+monitored_cities:
+  - "Paris"
+  - "Lyon"
+  - "Marseille"
+  - "Nice"
+
+# Alertes météo
+weather_alerts:
+  enabled: true
+  temperature_alerts:
+    min_temp: -5
+    max_temp: 35
+  wind_alerts:
+    max_wind_speed: 30
+  conditions_alerts:
+    - "storm"
+    - "heavy_rain"

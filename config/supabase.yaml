@@ -1,0 +1,88 @@
+# Configuration Supabase pour Master Plan IA 2025
+project_ref: "mtiwjnsseuvwvmfxcrcz"
+project_url: "https://mtiwjnsseuvwvmfxcrcz.supabase.co"
+
+# Clés d'authentification
+anon_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10aXdqbnNzZXV2d3ZtZnhjcmN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQ3NzksImV4cCI6MjA2ODI1MDc3OX0.-nrcK6mqaORgdv3rj_5lg-2Tk6VecPJmkZSxBRYOYX8"
+jwt_secret: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10aXdqbnNzZXV2d3ZtZnhjcmN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQ3NzksImV4cCI6MjA2ODI1MDc3OX0.-nrcK6mqaORgdv3rj_5lg-2Tk6VecPJmkZSxBRYOYX8"
+
+# URLs des services
+rest_url: "https://mtiwjnsseuvwvmfxcrcz.supabase.co/rest/v1"
+auth_url: "https://mtiwjnsseuvwvmfxcrcz.supabase.co/auth/v1"
+storage_url: "https://mtiwjnsseuvwvmfxcrcz.supabase.co/storage/v1"
+realtime_url: "https://mtiwjnsseuvwvmfxcrcz.supabase.co/realtime/v1"
+
+# Configuration client
+timeout: 30
+max_retries: 3
+read_only: true
+
+# Tables principales que nous utiliserons
+tables:
+  agents: "agents"
+  tasks: "tasks"
+  workflows: "workflows"
+  metrics: "metrics"
+  plugins: "plugins"
+  users: "users"
+  sessions: "sessions"
+  logs: "system_logs"
+  audit: "audit_trail"
+  configurations: "configurations"
+
+# Schémas de données
+schemas:
+  agents:
+    id: "uuid"
+    name: "text"
+    type: "text"
+    status: "text"
+    capabilities: "jsonb"
+    config: "jsonb"
+    created_at: "timestamp"
+    updated_at: "timestamp"
+  
+  tasks:
+    id: "uuid"
+    agent_id: "uuid"
+    workflow_id: "uuid"
+    type: "text"
+    status: "text"
+    payload: "jsonb"
+    result: "jsonb"
+    started_at: "timestamp"
+    completed_at: "timestamp"
+    created_at: "timestamp"
+  
+  workflows:
+    id: "uuid"
+    name: "text"
+    pattern: "text"
+    status: "text"
+    config: "jsonb"
+    agents: "jsonb"
+    results: "jsonb"
+    created_at: "timestamp"
+    updated_at: "timestamp"
+  
+  metrics:
+    id: "uuid"
+    name: "text"
+    value: "numeric"
+    tags: "jsonb"
+    metadata: "jsonb"
+    timestamp: "timestamp"
+    created_at: "timestamp"
+  
+  plugins:
+    id: "uuid"
+    name: "text"
+    version: "text"
+    type: "text"
+    status: "text"
+    config: "jsonb"
+    metrics: "jsonb"
+    load_time: "numeric"
+    error_message: "text"
+    created_at: "timestamp"
+    updated_at: "timestamp"

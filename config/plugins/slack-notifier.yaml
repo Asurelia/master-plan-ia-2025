@@ -1,0 +1,34 @@
+# Configuration pour le plugin Slack Notifier
+webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"  # À configurer
+default_channel: "#master-plan-notifications"
+username: "Master Plan IA Bot"
+icon_emoji: ":robot_face:"
+
+# Niveaux d'alerte à notifier
+alert_levels:
+  - "error"
+  - "warning"
+  - "info"
+
+# Rate limiting (messages par minute)
+rate_limit: 5
+
+# Canaux spécialisés
+channels:
+  errors: "#alerts"
+  performance: "#monitoring"
+  system: "#system-status"
+  plugins: "#plugins"
+
+# Horaires de notification (pour éviter les notifications la nuit)
+quiet_hours:
+  enabled: true
+  start: "22:00"
+  end: "08:00"
+  timezone: "Europe/Paris"
+
+# Format des messages
+message_format:
+  include_timestamp: true
+  include_hostname: true
+  max_message_length: 1000

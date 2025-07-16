@@ -1,0 +1,42 @@
+name: weather-agent
+version: 1.0.0
+description: Agent intelligent pour récupérer et analyser les données météorologiques
+author: Master Plan IA Team
+plugin_type: agent
+entry_point: weather_agent.py
+api_version: "1.0"
+license: MIT
+homepage: https://github.com/masterplan-ia/weather-agent
+tags:
+  - weather
+  - api
+  - data
+  - analysis
+min_python_version: "3.9"
+dependencies:
+  - requests
+  - datetime
+permissions:
+  - internet_access
+  - api_calls
+config_schema:
+  api_key:
+    type: string
+    required: true
+    description: Clé API pour le service météo
+  default_city:
+    type: string
+    required: false
+    default: Paris
+    description: Ville par défaut
+  update_interval:
+    type: integer
+    required: false
+    default: 300
+    description: Intervalle de mise à jour en secondes
+  temperature_unit:
+    type: string
+    required: false
+    default: celsius
+    enum: [celsius, fahrenheit, kelvin]
+    description: Unité de température
