@@ -85,17 +85,13 @@ class JWTAuth:
         logger.info("🔐 JWT Auth initialized")
     
     def _get_jwt_secret(self) -> str:
-        """Obtient ou génère le secret JWT"""
+        """Obtient le secret JWT de manière sécurisée"""
         
-        # Essayer de récupérer depuis Supabase config
+        # Essayer d'utiliser le système de configuration sécurisé
         try:
-            config_path = Path("config/supabase.yaml")
-            if config_path.exists():
-                import yaml
-                with open(config_path, 'r') as f:
-                    config = yaml.safe_load(f)
-                    if 'jwt_secret' in config:
-                        return config['jwt_secret']
+            from .secure_config import secure_config
+            jwt_config = secure_config.get_jwt_config()
+            return jwt_config['secret_key']
         except Exception as e:
             logger.warning(f"Could not load JWT secret from config: {e}")
         
@@ -104,9 +100,21 @@ class JWTAuth:
         if secret:
             return secret
         
-        # Générer un secret aléatoire
+        # Générer un secret aléatoire (SÉCURISÉ - sans logging)
         secret = secrets.token_urlsafe(32)
-        logger.warning(f"Generated new JWT secret: {secret[:8]}...")
+        logger.warning("Generated new JWT secret - IMPORTANT: Set JWT_SECRET_KEY environment variable for production")
+        
+        # Sauvegarder de manière sécurisée pour le développement
+        try:
+            secrets_dir = Path('.secrets')
+            secrets_dir.mkdir(mode=0o700, exist_ok=True)
+            secret_file = secrets_dir / 'jwt_secret_key.key'
+            secret_file.write_text(secret)
+            secret_file.chmod(0o600)
+            logger.info(f"JWT secret saved to {secret_file} (development only)")
+        except Exception as e:
+            logger.error(f"Failed to save JWT secret: {e}")
+        
         return secret
     
     def _hash_password(self, password: str) -> str:

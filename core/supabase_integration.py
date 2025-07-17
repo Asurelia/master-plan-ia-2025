@@ -60,10 +60,43 @@ class SupabaseIntegration:
             return self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
-        """Configuration par défaut"""
+        """Configuration sécurisée - utilise les variables d'environnement"""
+        
+        # Essayer d'utiliser le système de configuration sécurisé
+        try:
+            from .secure_config import secure_config
+            return {
+                'project_url': secure_config.credentials.supabase_url,
+                'anon_key': secure_config.credentials.supabase_anon_key,
+                'read_only': True,
+                'timeout': 30,
+                'tables': {
+                    'agents': 'agents',
+                    'tasks': 'tasks',
+                    'workflows': 'workflows',
+                    'metrics': 'metrics',
+                    'plugins': 'plugins',
+                    'webhooks': 'webhooks',
+                    'webhook_deliveries': 'webhook_deliveries',
+                    'users': 'users',
+                    'user_sessions': 'user_sessions'
+                }
+            }
+        except Exception as e:
+            logger.error(f"Could not load secure config: {e}")
+        
+        # Fallback vers les variables d'environnement
+        project_url = os.getenv('SUPABASE_URL')
+        anon_key = os.getenv('SUPABASE_ANON_KEY')
+        
+        if not project_url or not anon_key:
+            logger.error("CRITICAL: Supabase credentials not found in environment variables")
+            logger.error("Please set SUPABASE_URL and SUPABASE_ANON_KEY environment variables")
+            raise ValueError("Missing required Supabase credentials")
+        
         return {
-            'project_url': 'https://mtiwjnsseuvwvmfxcrcz.supabase.co',
-            'anon_key': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10aXdqbnNzZXV2d3ZtZnhjcmN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NzQ3NzksImV4cCI6MjA2ODI1MDc3OX0.-nrcK6mqaORgdv3rj_5lg-2Tk6VecPJmkZSxBRYOYX8',
+            'project_url': project_url,
+            'anon_key': anon_key,
             'read_only': True,
             'timeout': 30,
             'tables': {
@@ -71,7 +104,11 @@ class SupabaseIntegration:
                 'tasks': 'tasks',
                 'workflows': 'workflows',
                 'metrics': 'metrics',
-                'plugins': 'plugins'
+                'plugins': 'plugins',
+                'webhooks': 'webhooks',
+                'webhook_deliveries': 'webhook_deliveries',
+                'users': 'users',
+                'user_sessions': 'user_sessions'
             }
         }
     

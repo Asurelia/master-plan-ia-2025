@@ -163,6 +163,26 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import des composants de sécurité
+try:
+    secure_config_module = safe_import('secure_config')
+    defensive_middleware_module = safe_import('defensive_middleware')
+    security_monitor_module = safe_import('security_monitor')
+    
+    secure_config = secure_config_module.secure_config
+    create_defensive_middleware_stack = defensive_middleware_module.create_defensive_middleware_stack
+    security_monitor = security_monitor_module.security_monitor
+    SecurityEvent = security_monitor_module.SecurityEvent
+    SecurityEventType = security_monitor_module.SecurityEventType
+    ThreatLevel = security_monitor_module.ThreatLevel
+    
+    logger.info("✅ Security modules loaded successfully")
+except Exception as e:
+    logger.warning(f"⚠️ Security modules not available: {e}")
+    secure_config = None
+    create_defensive_middleware_stack = None
+    security_monitor = None
+
 # Modèles Pydantic pour l'API
 class AgentModel(BaseModel):
     id: str
@@ -284,6 +304,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Voice detection initialization warning: {e}")
     
+    # Initialisation du monitoring de sécurité
+    try:
+        if security_monitor:
+            await security_monitor.start()
+            logger.info("✅ Security monitoring system initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Security monitoring initialization warning: {e}")
+    
     logger.info("✅ Master Plan IA 2025 API initialized")
     
     yield
@@ -339,14 +367,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuration CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configuration CORS sécurisée
+if secure_config:
+    cors_config = secure_config.get_cors_config()
+    app.add_middleware(
+        CORSMiddleware,
+        **cors_config
+    )
+else:
+    # Fallback sécurisé
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],  # Limite aux origines connues
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+# Application de la pile de middleware défensif
+if create_defensive_middleware_stack:
+    app = create_defensive_middleware_stack(app)
+    logger.info("✅ Defensive middleware stack applied")
+else:
+    logger.warning("⚠️ Defensive middleware not available")
 
 async def register_default_agents():
     """Enregistre les agents par défaut"""
@@ -1496,11 +1539,46 @@ async def get_agent_types():
     """Retourne les types d'agents disponibles"""
     return [agent_type.value for agent_type in AgentType]
 
-# Gestion des erreurs
+# Gestion sécurisée des erreurs
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {exc}")
-    return {"error": "Internal server error", "detail": str(exc)}
+async def secure_exception_handler(request, exc):
+    import traceback
+    import uuid
+    
+    request_id = str(uuid.uuid4())
+    
+    # Log complet et sécurisé
+    logger.error(
+        f"Unhandled exception: {type(exc).__name__}",
+        extra={
+            "request_id": request_id,
+            "path": request.url.path,
+            "method": request.method,
+            "user_agent": request.headers.get("user-agent"),
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+    )
+    
+    # Réponse sécurisée basée sur l'environnement
+    if secure_config and secure_config.is_debug():
+        # Mode développement
+        return {
+            "error": "Internal server error",
+            "request_id": request_id,
+            "debug": {
+                "type": type(exc).__name__,
+                "message": str(exc)
+            }
+        }
+    else:
+        # Mode production - minimal
+        return {
+            "error": "Internal server error",
+            "request_id": request_id,
+            "message": "An unexpected error occurred"
+        }
 
 if __name__ == "__main__":
     import uvicorn

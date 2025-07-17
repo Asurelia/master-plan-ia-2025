@@ -100,3 +100,7 @@ master_plan.db
 observability.log
 master-plan-*.log
 multi-ai-adapters.log
+
+# Security files
+.secrets/
+security_validation_report.json
